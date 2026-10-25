@@ -1,0 +1,33 @@
+{
+  "name": "@tonybrobston/engineering-standards",
+  "version": "1.0.0",
+  "description": "Shared code standards, lint config, test config and CI checks for Brobston repositories",
+  "type": "module",
+  "license": "MIT",
+  "exports": {
+    "./eslint": "./eslint/index.js",
+    "./vitest": "./vitest/base.js"
+  },
+  "files": [
+    "eslint",
+    "vitest",
+    "ruff.toml",
+    "scripts"
+  ],
+  "scripts": {
+    "test": "node --test eslint/no-comments.test.js && python3 -I scripts/check_no_comments.py --self-test && bash scripts/tests-must-fail-without-source.test.sh"
+  },
+  "peerDependencies": {
+    "eslint": ">=9",
+    "typescript-eslint": ">=8"
+  },
+  "peerDependenciesMeta": {
+    "typescript-eslint": {
+      "optional": true
+    }
+  },
+  "devDependencies": {
+    "eslint": "^9.0.0",
+    "typescript-eslint": "^8.0.0"
+  }
+}

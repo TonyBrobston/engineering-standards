@@ -1,0 +1,29 @@
+line-length = 100
+exclude = [".engineering-standards", "node_modules", "build", "dist"]
+
+[lint]
+select = [
+  "E",
+  "F",
+  "W",
+  "I",
+  "UP",
+  "B",
+  "N",
+  "ERA",
+  "FIX",
+  "RET",
+  "SIM",
+  "C90",
+  "PLR0913",
+]
+ignore = ["E501"]
+
+[lint.mccabe]
+max-complexity = 10
+
+[lint.pylint]
+max-args = 4
+
+[lint.per-file-ignores]
+"tests/**" = ["PLR0913", "C90"]

@@ -1,0 +1,114 @@
+name: Engineering standards
+
+on:
+  workflow_call:
+    inputs:
+      runtime:
+        description: "node or python"
+        required: true
+        type: string
+      working-directory:
+        description: "Directory containing the project (package.json or pyproject.toml)"
+        required: false
+        type: string
+        default: "."
+      package-manager:
+        description: "npm or pnpm (node only)"
+        required: false
+        type: string
+        default: "npm"
+      node-version:
+        required: false
+        type: string
+        default: "24"
+      python-version:
+        required: false
+        type: string
+        default: "3.12"
+      test-command:
+        description: "Command that runs the unit tests and exits non-zero on failure"
+        required: true
+        type: string
+      source-pattern:
+        description: "Extended regex matching source files, relative to working-directory"
+        required: false
+        type: string
+        default: "^(src|lib|firmware/lib|custom_components)/"
+      lint-command:
+        description: "Command that lints and exits non-zero on failure; empty skips the step"
+        required: false
+        type: string
+        default: ""
+      coverage-command:
+        description: "Command that runs tests with coverage thresholds; empty skips the step"
+        required: false
+        type: string
+        default: ""
+
+jobs:
+  standards:
+    name: standards
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ${{ inputs.working-directory }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/checkout@v4
+        with:
+          repository: TonyBrobston/engineering-standards
+          path: .engineering-standards
+
+      - if: inputs.runtime == 'node' && inputs.package-manager == 'pnpm'
+        uses: pnpm/action-setup@v4
+
+      - if: inputs.runtime == 'node'
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ inputs.node-version }}
+          cache: ${{ inputs.package-manager }}
+          cache-dependency-path: ${{ inputs.working-directory }}/${{ inputs.package-manager == 'pnpm' && 'pnpm-lock.yaml' || 'package-lock.json' }}
+
+      - if: inputs.runtime == 'node' && inputs.package-manager == 'npm'
+        run: npm ci
+
+      - if: inputs.runtime == 'node' && inputs.package-manager == 'pnpm'
+        run: pnpm install --frozen-lockfile
+
+      - if: inputs.runtime == 'python'
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ inputs.python-version }}
+
+      - if: inputs.runtime == 'python'
+        run: |
+          python -m pip install --upgrade pip ruff
+          if [ -f pyproject.toml ]; then python -m pip install -e ".[dev]" 2>/dev/null || python -m pip install -e . ; fi
+          if [ -f requirements-dev.txt ]; then python -m pip install -r requirements-dev.txt; fi
+          if [ -f requirements.txt ]; then python -m pip install -r requirements.txt; fi
+
+      - name: lint
+        if: inputs.lint-command != ''
+        run: ${{ inputs.lint-command }}
+
+      - name: no comments (python)
+        if: inputs.runtime == 'python'
+        run: python3 -I "${GITHUB_WORKSPACE}/.engineering-standards/scripts/check_no_comments.py" .
+
+      - name: tests
+        run: ${{ inputs.test-command }}
+
+      - name: coverage thresholds
+        if: inputs.coverage-command != ''
+        run: ${{ inputs.coverage-command }}
+
+      - name: tests must fail without the implementation
+        if: github.event_name == 'pull_request' && !contains(github.event.pull_request.labels.*.name, 'refactor')
+        run: |
+          bash "${GITHUB_WORKSPACE}/.engineering-standards/scripts/tests-must-fail-without-source.sh" \
+            "origin/${{ github.base_ref }}" \
+            "${{ inputs.test-command }}" \
+            "${{ inputs.source-pattern }}"

@@ -1,0 +1,15 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  standards:
+    uses: TonyBrobston/engineering-standards/.github/workflows/standards.yml@main
+    with:
+      runtime: python
+      lint-command: ruff check . && ruff format --check .
+      test-command: python -m pytest -q
+      source-pattern: "^(lib|custom_components)/"
