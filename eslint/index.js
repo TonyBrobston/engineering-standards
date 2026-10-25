@@ -1,3 +1,4 @@
+import typescriptEslint from "typescript-eslint";
 import { brobstonPlugin } from "./no-comments.js";
 
 const allowedShortNames = ["i", "j", "k", "x", "y", "id", "ok", "db", "fs", "os", "to", "at", "on"];
@@ -32,8 +33,21 @@ export const brobstonRules = {
 
 export const brobstonConfig = {
   name: "brobston/engineering-standards",
+  files: ["**/*.{js,mjs,cjs,jsx,ts,mts,cts,tsx}"],
+  languageOptions: { parserOptions: { ecmaFeatures: { jsx: true } } },
   plugins: { brobston: brobstonPlugin },
   rules: brobstonRules,
+};
+
+export const brobstonTypescriptConfig = {
+  name: "brobston/engineering-standards/typescript",
+  files: ["**/*.{ts,mts,cts,tsx}"],
+  languageOptions: { parser: typescriptEslint.parser },
+  plugins: { "@typescript-eslint": typescriptEslint.plugin },
+  rules: {
+    "no-unused-vars": "off",
+    "@typescript-eslint/no-unused-vars": ["error", { argsIgnorePattern: "^_", varsIgnorePattern: "^_" }],
+  },
 };
 
 export const brobstonTestOverrides = {
@@ -51,4 +65,4 @@ export const brobstonIgnores = {
   ignores: [".engineering-standards/**", "dist/**", "build/**", "coverage/**", ".next/**", "out/**"],
 };
 
-export default [brobstonIgnores, brobstonConfig, brobstonTestOverrides];
+export default [brobstonIgnores, brobstonConfig, brobstonTypescriptConfig, brobstonTestOverrides];

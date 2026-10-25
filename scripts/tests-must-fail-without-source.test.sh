@@ -124,6 +124,92 @@ EOF
   expect_exit 0 "${code}" "a test-only change has nothing to prove"
 }
 
+expect_clean_repository() {
+  local repository="$1"
+  if [[ -n "$(git -C "${repository}" status --porcelain)" ]]; then
+    echo "not ok - working tree or index not restored"
+    git -C "${repository}" status --short
+    exit 1
+  fi
+}
+
+scenario_nested_project() {
+  local scenario="$1" expected="$2"
+  local repository="${fixture_root}/nested-${scenario}"
+  create_base_repository "${repository}"
+  mkdir "${repository}/ui"
+  git -C "${repository}" mv src tests ui/
+  git -C "${repository}" commit -qm "nest project"
+  git -C "${repository}" branch -f main HEAD
+  sed -i 's/left + right/Number(left) + Number(right)/' "${repository}/ui/src/add.mjs"
+  if [[ "${scenario}" == real-test ]]; then
+    cat >> "${repository}/ui/tests/add.test.mjs" <<'EOF'
+
+test("coerces strings", () => {
+  assert.equal(add("2", "3"), 5);
+});
+EOF
+  elif [[ "${scenario}" == unrelated-test ]]; then
+    cat >> "${repository}/ui/tests/add.test.mjs" <<'EOF'
+
+test("adds zero", () => {
+  assert.equal(add(0, 0), 0);
+});
+EOF
+  elif [[ "${scenario}" == sibling-test ]]; then
+    mkdir "${repository}/tests"
+    echo 'export const total = 1;' > "${repository}/tests/sibling.test.mjs"
+  fi
+  git -C "${repository}" add -A
+  git -C "${repository}" commit -qm "nested change"
+  set +e; run_script "${repository}/ui"; local code=$?; set -e
+  expect_exit "${expected}" "${code}" "nested project ${scenario}"
+  expect_clean_repository "${repository}"
+}
+
+scenario_deleted_source() {
+  local scenario="$1" expected="$2" nested="${3:-}"
+  local repository="${fixture_root}/deleted-${scenario}-${nested:-root}"
+  create_base_repository "${repository}"
+  if [[ -n "${nested}" ]]; then
+    mkdir "${repository}/${nested}"
+    git -C "${repository}" mv src tests "${nested}/"
+    git -C "${repository}" commit -qm "nest project"
+    git -C "${repository}" branch -f main HEAD
+  fi
+  local project="${repository}${nested:+/${nested}}"
+  git -C "${project}" rm -q src/add.mjs
+  if [[ "${scenario}" == real-test ]]; then
+    cat > "${project}/tests/add.test.mjs" <<'EOF'
+import assert from "node:assert/strict";
+import { existsSync } from "node:fs";
+import { test } from "node:test";
+
+test("obsolete implementation is absent", () => {
+  assert.equal(existsSync("src/add.mjs"), false);
+});
+EOF
+  elif [[ "${scenario}" == unrelated-test ]]; then
+    echo 'import { test } from "node:test"; test("unrelated", () => {});' > "${project}/tests/add.test.mjs"
+  fi
+  git -C "${repository}" add -A
+  git -C "${repository}" commit -qm "delete implementation"
+  set +e; run_script "${project}"; local code=$?; set -e
+  expect_exit "${expected}" "${code}" "deleted source ${scenario} ${nested}"
+  [[ ! -e "${project}/src/add.mjs" ]] || { echo "not ok - deletion not restored"; exit 1; }
+  expect_clean_repository "${repository}"
+}
+
+scenario_nested_project real-test 0
+scenario_nested_project unrelated-test 1
+scenario_nested_project without-test 1
+scenario_nested_project sibling-test 1
+scenario_deleted_source real-test 0
+scenario_deleted_source unrelated-test 1
+scenario_deleted_source without-test 1
+scenario_deleted_source real-test 0 ui
+scenario_deleted_source unrelated-test 1 ui
+
 scenario_feature_with_real_test
 scenario_source_without_test
 scenario_test_independent_of_change
