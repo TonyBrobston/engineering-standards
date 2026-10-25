@@ -54,11 +54,15 @@ mechanical ones.
 ## What the CI job checks
 
 1. Lint (your `lint-command`): ESLint with the shared rules or ruff.
-2. No comments in Python (the ESLint rule covers JS/TS).
+2. No comments in Python (the ESLint rule covers JS/TS, including TSX).
+   The shared ESLint config requires the `typescript-eslint` peer for its TypeScript parser.
 3. Tests (your `test-command`).
 4. Coverage thresholds (your `coverage-command`, if set).
 5. On pull requests: the PR's tests are run against the base branch's source
-   and must fail. A PR that changes `src/` without touching a test fails. Add
+   and must fail. Source patterns and test paths are relative to `working-directory`;
+   sibling projects do not count. Added, modified, renamed, and deleted source
+   files are checked, then restored to the PR state. A source change without
+   a test change fails. Add
    the `refactor` label to skip this check for behaviour-preserving changes;
    the reviewer confirms the label is honest.
 
@@ -76,5 +80,5 @@ npm install
 npm test
 ```
 
-Runs the ESLint rule tests, the Python checker self-test, and four git
-fixtures for the test-first proof script.
+Runs the ESLint rule tests, the Python checker self-test, and git fixtures
+for root and nested projects, including deleted implementations.

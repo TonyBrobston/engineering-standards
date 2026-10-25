@@ -21,11 +21,6 @@
     "eslint": ">=9",
     "typescript-eslint": ">=8"
   },
-  "peerDependenciesMeta": {
-    "typescript-eslint": {
-      "optional": true
-    }
-  },
   "devDependencies": {
     "eslint": "^9.0.0",
     "typescript-eslint": "^8.0.0"

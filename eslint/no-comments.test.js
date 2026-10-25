@@ -65,3 +65,41 @@ test("clean code passes", () => {
   ].join("\n");
   assert.deepEqual(ruleIdsOf(code), []);
 });
+
+for (const filename of ["src/total.ts", "src/total.tsx"]) {
+  test(`${filename} enforces comments and names with TypeScript syntax`, () => {
+    const messages = linter.verify(
+      "// explains the value\nexport const ct: number = 5;\n",
+      brobston,
+      { filename },
+    );
+    assert.deepEqual(messages.map((message) => message.ruleId).sort(), [
+      "brobston/no-comments",
+      "id-length",
+    ]);
+  });
+}
+
+test("valid TSX parses and passes the shared rules", () => {
+  assert.deepEqual(linter.verify(
+    'export const Total = ({ total }: { total: number }) => <span>{total}</span>;\n',
+    brobston,
+    { filename: "src/total.tsx" },
+  ), []);
+});
+
+test("TypeScript signatures do not produce unused-parameter errors", () => {
+  assert.deepEqual(linter.verify(
+    "export type Mapper = (value: number) => number;\n",
+    brobston,
+    { filename: "src/mapper.ts" },
+  ), []);
+});
+
+test("JSX parses with the shared config", () => {
+  assert.deepEqual(linter.verify(
+    'export const Total = ({ total }) => <span>{total}</span>;\n',
+    brobston,
+    { filename: "src/total.jsx" },
+  ), []);
+});

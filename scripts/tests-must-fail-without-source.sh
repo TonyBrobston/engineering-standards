@@ -6,38 +6,55 @@ test_command="${2:?usage: tests-must-fail-without-source.sh <base-ref> <test-com
 source_pattern="${3:-^(src|lib|firmware/lib|custom_components)/}"
 test_pattern="${4:-(^|/)(tests?|__tests__|spec)/|\.(test|spec)\.[a-z]+$|(^|/)test_[^/]+\.py$}"
 
-changed_files="$(git diff --name-only --diff-filter=ACMR "${base_ref}...HEAD")"
-changed_test_files="$(printf '%s\n' "${changed_files}" | grep -E "${test_pattern}" || true)"
-changed_source_files="$(printf '%s\n' "${changed_files}" | grep -E "${source_pattern}" | grep -vE "${test_pattern}" || true)"
+repository_prefix="$(git rev-parse --show-prefix)"
+changed_source_files=()
+changed_test_files=()
 
-if [[ -z "${changed_source_files}" ]]; then
+changed_file_list="$(mktemp)"
+trap 'rm -f -- "${changed_file_list}"' EXIT
+git diff --relative --name-only -z --no-renames --diff-filter=ACDMRT "${base_ref}...HEAD" -- . > "${changed_file_list}"
+
+while IFS= read -r -d '' changed_file; do
+  if [[ "${changed_file}" =~ ${test_pattern} ]]; then
+    changed_test_files+=("${changed_file}")
+  elif [[ "${changed_file}" =~ ${source_pattern} ]]; then
+    changed_source_files+=("${changed_file}")
+  fi
+done < "${changed_file_list}"
+rm -f -- "${changed_file_list}"
+trap - EXIT
+
+if [[ "${#changed_source_files[@]}" -eq 0 ]]; then
   echo "No source files changed; nothing to prove."
   exit 0
 fi
 
-if [[ -z "${changed_test_files}" ]]; then
+if [[ "${#changed_test_files[@]}" -eq 0 ]]; then
   echo "::error::Source changed without a test change. Write the failing test first, or label the PR 'refactor'."
-  printf 'Changed source files:\n%s\n' "${changed_source_files}"
+  printf 'Changed source file: %s\n' "${changed_source_files[@]}"
   exit 1
 fi
 
 echo "Reverting changed source files to ${base_ref} and keeping the PR's tests:"
-printf '%s\n' "${changed_source_files}"
+printf '%s\n' "${changed_source_files[@]}"
 
-while IFS= read -r source_file; do
-  if git cat-file -e "${base_ref}:${source_file}" 2>/dev/null; then
-    git checkout "${base_ref}" -- "${source_file}"
+restore_source() {
+  git restore --source=HEAD --staged --worktree -- "${changed_source_files[@]}"
+}
+trap restore_source EXIT
+
+for source_file in "${changed_source_files[@]}"; do
+  if git cat-file -e "${base_ref}:${repository_prefix}${source_file}" 2>/dev/null; then
+    git restore --source="${base_ref}" --staged --worktree -- "${source_file}"
   else
-    rm -f "${source_file}"
+    rm -f -- "${source_file}"
   fi
-done <<< "${changed_source_files}"
+done
 
 set +e
 bash -c "${test_command}"
 test_exit_code=$?
 set -e
-
-git checkout HEAD -- .
 
 if [[ "${test_exit_code}" -eq 0 ]]; then
   echo "::error::The PR's tests pass against the base branch's source, so they do not test this change. Write a test that fails without the implementation."
